@@ -2,7 +2,7 @@
    Caches the app shell so it works offline after the first load.
    Bump CACHE_VERSION when you change files and want clients to re-fetch. */
 
-const CACHE_VERSION = "cik-clock-v1";
+const CACHE_VERSION = "cik-clock-v1.0.1";
 const APP_SHELL = [
   "./",
   "./index.html",

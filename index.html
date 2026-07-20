@@ -1392,6 +1392,10 @@ function renderTabSettings(body) {
       }}, "Reset app to seed data")
     ])
   ]));
+
+  body.appendChild(el("div", {
+    style: { textAlign: "center", padding: "24px 0 8px", color: "var(--muted)", fontSize: "13px" }
+  }, "CIK Clock v1.0.1"));
 }
 
 function downloadBackup() {
