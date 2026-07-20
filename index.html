@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CIK Clock">
+<meta name="theme-color" content="#1a1614">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>CIK Clock</title>
+<style>
+  :root {
+    --bg: #1a1614;
+    --bg-2: #211c19;
+    --surface: #2a2320;
+    --surface-2: #362d28;
+    --border: #443831;
+    --text: #f5ecdb;
+    --text-dim: #b8ab99;
+    --muted: #8a8074;
+    --red: #c8442a;
+    --red-hot: #e35a3d;
+    --green: #7a9b52;
+    --green-bright: #9dbf6e;
+    --gold: #d4a24a;
+    --danger: #d4643c;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 20px;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body {
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    min-height: 100vh;
+  }
+  #app { flex: 1; display: flex; flex-direction: column; position: relative; }
+
+  h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 700; margin: 0; }
+  button { font: inherit; color: inherit; }
+  input, select { font: inherit; color: inherit; }
+
+  /* -------- Sync badge -------- */
+  .sync-badge {
+    position: absolute; top: 12px; right: 16px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; color: var(--text-dim);
+    background: rgba(0,0,0,0.3);
+    padding: 6px 12px; border-radius: 999px;
+    z-index: 10;
+  }
+  .sync-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .sync-dot.synced { background: var(--green-bright); }
+  .sync-dot.pending { background: var(--gold); }
+  .sync-dot.offline { background: var(--muted); }
+  .sync-dot.error { background: var(--red-hot); }
+
+  /* -------- Keypad screen -------- */
+  .screen { flex: 1; display: flex; flex-direction: column; padding: 40px 24px 24px; }
+  .screen.center { justify-content: center; align-items: center; }
+
+  .headline {
+    font-family: Georgia, serif;
+    font-size: 36px;
+    text-align: center;
+    margin: 24px 0 12px;
+    color: var(--text);
+  }
+  .subhead { text-align: center; color: var(--text-dim); font-size: 20px; margin-bottom: 24px; }
+
+  .pin-dots {
+    display: flex; justify-content: center; gap: 24px;
+    margin: 32px 0 40px;
+    height: 32px; align-items: center;
+  }
+  .pin-dot {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 3px solid var(--border);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .pin-dot.filled { background: var(--gold); border-color: var(--gold); }
+  .pin-dots.shake { animation: shake 0.4s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-16px); }
+    75% { transform: translateX(16px); }
+  }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .key {
+    height: 96px;
+    font-size: 40px;
+    font-weight: 600;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    color: var(--text);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: transform 0.05s, background 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .key:active { transform: scale(0.97); background: var(--surface-2); }
+  .key.action { background: var(--bg-2); font-size: 24px; color: var(--text-dim); }
+  .key.clear { color: var(--danger); }
+
+  .msg {
+    text-align: center; margin-top: 24px;
+    font-size: 20px; color: var(--text-dim);
+    min-height: 28px;
+  }
+  .msg.error { color: var(--red-hot); }
+
+  /* -------- Big buttons -------- */
+  .big-btn {
+    display: block; width: 100%;
+    padding: 28px;
+    font-size: 28px;
+    font-weight: 600;
+    background: var(--surface);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .big-btn:active { transform: scale(0.98); }
+  .big-btn.primary { background: var(--red); border-color: var(--red); color: white; }
+  .big-btn.success { background: var(--green); border-color: var(--green); color: white; }
+  .big-btn.subtle { background: transparent; border: none; color: var(--text-dim); font-size: 22px; padding: 20px; }
+  .big-btn.danger { background: transparent; border: 2px solid var(--danger); color: var(--danger); }
+
+  .btn-row { display: flex; gap: 12px; }
+  .btn-row .big-btn { margin-bottom: 0; }
+
+  /* -------- Job pick / active shift -------- */
+  .card {
+    max-width: 640px; width: 100%;
+    margin: 0 auto;
+    background: var(--surface);
+    border-radius: 24px;
+    padding: 32px;
+    border: 1px solid var(--border);
+  }
+  .card h2 { font-size: 32px; margin-bottom: 8px; }
+  .card .sub { color: var(--text-dim); margin-bottom: 24px; font-size: 20px; }
+  .clock-large {
+    font-size: 48px; font-weight: 600; text-align: center;
+    color: var(--gold); margin: 24px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-sub { text-align: center; color: var(--text-dim); font-size: 20px; margin-bottom: 32px; }
+
+  /* -------- Confirmation splash -------- */
+  .splash {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 24px; text-align: center;
+    background: var(--bg);
+  }
+  .splash.in { background: linear-gradient(180deg, #2a3a20 0%, var(--bg) 100%); }
+  .splash.out { background: linear-gradient(180deg, #3a251a 0%, var(--bg) 100%); }
+  .splash-icon {
+    width: 120px; height: 120px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 72px; margin-bottom: 24px;
+    background: rgba(255,255,255,0.08);
+  }
+  .splash h1 { font-size: 48px; margin-bottom: 16px; }
+  .splash .big { font-size: 32px; color: var(--gold); margin-bottom: 24px; font-family: Georgia, serif; }
+  .splash .meta { color: var(--text-dim); font-size: 22px; margin-bottom: 32px; }
+  .splash .cta { color: var(--muted); font-size: 18px; }
+
+  /* -------- Manager console -------- */
+  .mgr-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+  }
+  .mgr-header h2 { font-size: 24px; }
+  .mgr-tabs {
+    display: flex; overflow-x: auto;
+    background: var(--bg-2); border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+  }
+  .mgr-tab {
+    padding: 16px 20px;
+    background: transparent; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 18px;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+  }
+  .mgr-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .mgr-body { flex: 1; overflow-y: auto; padding: 20px; }
+  .mgr-body h3 { font-size: 20px; margin-bottom: 12px; color: var(--text-dim); font-weight: 500; }
+
+  .done-btn {
+    background: var(--surface); border: 2px solid var(--border);
+    color: var(--text); padding: 12px 20px;
+    border-radius: 12px; font-size: 18px; cursor: pointer;
+  }
+
+  /* -------- Tables and lists -------- */
+  table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-dim); font-weight: 500; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:hover { background: var(--surface); }
+  .row-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+    margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .row-item .info { flex: 1; min-width: 200px; }
+  .row-item .name { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .row-item .meta { color: var(--text-dim); font-size: 16px; }
+  .row-item .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 14px; background: var(--surface-2);
+    color: var(--text-dim);
+    margin-right: 4px;
+  }
+  .pill.ot { background: rgba(200, 68, 42, 0.2); color: var(--red-hot); }
+  .pill.active { background: rgba(122, 155, 82, 0.2); color: var(--green-bright); }
+
+  /* -------- Forms -------- */
+  .field { margin-bottom: 16px; }
+  .field label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 16px; }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-2);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 18px;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .field small { color: var(--muted); font-size: 13px; }
+
+  /* -------- Modal -------- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 28px;
+    max-width: 560px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 26px; margin-bottom: 16px; }
+
+  .btn-sm {
+    padding: 10px 16px; border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text); font-size: 15px; cursor: pointer;
+  }
+  .btn-sm.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+  .btn-sm.primary { background: var(--red); border-color: var(--red); color: white; }
+
+  .summary-line {
+    display: flex; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .summary-line.total { font-size: 24px; font-weight: 700; color: var(--gold); border-top: 2px solid var(--gold); margin-top: 8px; padding-top: 16px; border-bottom: none; }
+
+  .hidden { display: none !important; }
+
+  /* -------- Toast -------- */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 14px 24px; border-radius: 999px;
+    font-size: 16px; z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  /* On smaller screens (phone in a pinch) still legible */
+  @media (max-width: 480px) {
+    .key { height: 72px; font-size: 32px; }
+    .headline { font-size: 28px; }
+    .splash h1 { font-size: 36px; }
+    .field-row { grid-template-columns: 1fr; }
+  }
+
+  /* On big iPads, make everything a bit bigger */
+  @media (min-width: 900px) {
+    body { font-size: 22px; }
+    .key { height: 120px; font-size: 48px; }
+    .headline { font-size: 44px; }
+    .keypad { max-width: 640px; gap: 20px; }
+    .pin-dot { width: 28px; height: 28px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sync-badge" class="sync-badge hidden">
+    <span class="sync-dot"></span>
+    <span id="sync-text">Local only</span>
+  </div>
+  <div id="screen"></div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   CIK CLOCK — Cast Iron Kitchen employee time clock
+   Single-file PWA. All state in localStorage. Optional
+   Google Sheets sync via Apps Script Web App URL.
+   ============================================================ */
+
+// ---------- Constants ----------
+const STORAGE_KEY = "cik_clock_v1";
+const IDLE_TIMEOUT_MS = 45_000; // return to main after 45s idle
+const CONFIRM_MS = 5_000;       // confirmation splash duration
+const MISSED_PUNCH_HOURS = 16;  // auto-flag shifts older than 16h
+const JOBS = ["Prep Cook", "Prep Plate", "Catering"];
+const JOB_KEYS = { "Prep Cook": "prepCook", "Prep Plate": "prepPlate", "Catering": "catering" };
+
+// ---------- Default seed data ----------
+function seedState() {
+  return {
+    staff: [
+      { id: uid(), name: "Danielle", pin: "1001", wages: { prepCook: 16, prepPlate: 17, catering: 20 }, active: true, notes: "" },
+      { id: uid(), name: "Marissa",  pin: "1002", wages: { prepCook: 16, prepPlate: 17, catering: 20 }, active: true, notes: "" },
+      { id: uid(), name: "Cheryl",   pin: "1003", wages: { prepCook: 16, prepPlate: 17, catering: 20 }, active: true, notes: "" },
+      { id: uid(), name: "Elaine",   pin: "1004", wages: { prepCook: 16, prepPlate: 17, catering: 20 }, active: true, notes: "" },
+      { id: uid(), name: "Helen",    pin: "1005", wages: { prepCook: 16, prepPlate: 17, catering: 20 }, active: true, notes: "" },
+    ],
+    punches: [],
+    settings: {
+      masterPin: "1957",
+      syncUrl: "",
+      lastSync: null,
+      lastSyncStatus: null
+    }
+  };
+}
+
+// ---------- State ----------
+let state = loadState();
+let ui = {
+  screen: "keypad",
+  pin: "",
+  errorMsg: "",
+  managerTab: "onclock",
+  payPeriodStart: null,
+  payPeriodEnd: null,
+  editingStaffId: null,
+  editingPunchId: null,
+  idleTimer: null
+};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const s = seedState();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      return s;
+    }
+    const parsed = JSON.parse(raw);
+    // Backfill defaults if older versions loaded
+    parsed.settings = Object.assign({ masterPin: "1957", syncUrl: "", lastSync: null, lastSyncStatus: null }, parsed.settings || {});
+    parsed.staff = parsed.staff || [];
+    parsed.punches = parsed.punches || [];
+    return parsed;
+  } catch (e) {
+    console.error("Failed to load state, reseeding:", e);
+    const s = seedState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    return s;
+  }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  updateSyncBadge();
+}
+
+// ---------- Utilities ----------
+function uid() {
+  return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function nowIso() { return new Date().toISOString(); }
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+function fmtDateTimeInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function parseDateTimeInput(v) {
+  if (!v) return null;
+  return new Date(v).toISOString();
+}
+function fmtDuration(ms) {
+  if (ms == null || isNaN(ms) || ms < 0) return "—";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h ${m}m`;
+}
+function money(n) {
+  return "$" + (Math.round(n * 100) / 100).toFixed(2);
+}
+function startOfDay(d) {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+function endOfDay(d) {
+  const c = new Date(d);
+  c.setHours(23, 59, 59, 999);
+  return c;
+}
+function shallowClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+// ---------- Punch math ----------
+function calcHours(p, endOverride) {
+  if (!p.clockIn) return 0;
+  const end = endOverride ? new Date(endOverride) : (p.clockOut ? new Date(p.clockOut) : new Date());
+  const start = new Date(p.clockIn);
+  const rawMs = end - start;
+  const brk = (p.breakMinutes || 0) * 60000;
+  const paid = Math.max(0, rawMs - brk);
+  return paid / 3600000;
+}
+function calcPay(p, staff) {
+  if (!staff || !p.job) return 0;
+  const key = JOB_KEYS[p.job];
+  const rate = staff.wages ? (staff.wages[key] || 0) : 0;
+  return calcHours(p) * rate;
+}
+function staffById(id) { return state.staff.find(s => s.id === id); }
+function staffByPin(pin) { return state.staff.find(s => s.pin === pin && s.active); }
+function openPunchFor(staffId) {
+  return state.punches.find(p => p.staffId === staffId && !p.clockOut);
+}
+function isLikelyMissedPunch(punch) {
+  if (!punch || punch.clockOut) return false;
+  const hoursOpen = (Date.now() - new Date(punch.clockIn).getTime()) / 3600000;
+  return hoursOpen > MISSED_PUNCH_HOURS;
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function el(tag, attrs = {}, children = []) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === "class") e.className = attrs[k];
+    else if (k === "html") e.innerHTML = attrs[k];
+    else if (k.startsWith("on") && typeof attrs[k] === "function") e.addEventListener(k.slice(2), attrs[k]);
+    else if (k === "style") Object.assign(e.style, attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of [].concat(children)) {
+    if (c == null || c === false) continue;
+    e.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+function screenEl() { return document.getElementById("screen"); }
+function clearScreen() { screenEl().innerHTML = ""; }
+function mount(node) { clearScreen(); screenEl().appendChild(node); }
+
+// ---------- Keypad (main) ----------
+function renderKeypad() {
+  ui.screen = "keypad";
+  document.getElementById("sync-badge").classList.remove("hidden");
+  const dots = el("div", { class: "pin-dots", id: "pin-dots" },
+    [0,1,2,3].map(i => el("div", { class: "pin-dot" + (i < ui.pin.length ? " filled" : "") }))
+  );
+  const keys = ["1","2","3","4","5","6","7","8","9","C","0","<"];
+  const grid = el("div", { class: "keypad" },
+    keys.map(k => {
+      let cls = "key";
+      let onclick;
+      if (k === "C") { cls += " action clear"; onclick = () => { ui.pin = ""; renderKeypad(); }; }
+      else if (k === "<") { cls += " action"; onclick = () => { ui.pin = ui.pin.slice(0, -1); renderKeypad(); }; }
+      else onclick = () => handleDigit(k);
+      return el("button", { class: cls, onclick, "aria-label": k }, k);
+    })
+  );
+  const msg = el("div", { class: "msg" + (ui.errorMsg ? " error" : "") }, ui.errorMsg || "");
+  const wrap = el("div", { class: "screen center" }, [
+    el("h1", { class: "headline" }, "Tap your 4 numbers"),
+    el("div", { class: "subhead" }, "to clock in or out"),
+    dots,
+    grid,
+    msg
+  ]);
+  mount(wrap);
+  resetIdleTimer(); // stays on this screen; not really needed but consistent
+}
+
+function handleDigit(d) {
+  if (ui.errorMsg) { ui.errorMsg = ""; }
+  if (ui.pin.length >= 4) return;
+  ui.pin += d;
+  renderKeypad();
+  if (ui.pin.length === 4) {
+    setTimeout(() => submitPin(ui.pin), 150);
+  }
+}
+
+function submitPin(pin) {
+  // Master PIN?
+  if (pin === state.settings.masterPin) {
+    ui.pin = "";
+    ui.errorMsg = "";
+    renderManager();
+    return;
+  }
+  // Staff PIN?
+  const staff = staffByPin(pin);
+  if (!staff) {
+    // Wrong PIN — gentle
+    ui.errorMsg = "That PIN wasn't found — try again.";
+    const dots = document.getElementById("pin-dots");
+    if (dots) {
+      dots.classList.add("shake");
+      setTimeout(() => dots.classList.remove("shake"), 400);
+    }
+    setTimeout(() => { ui.pin = ""; renderKeypad(); }, 700);
+    return;
+  }
+  // Clear pin buffer and error
+  ui.pin = "";
+  ui.errorMsg = "";
+  const open = openPunchFor(staff.id);
+  if (open) {
+    if (isLikelyMissedPunch(open)) {
+      renderMissedPunch(staff, open);
+    } else {
+      renderActiveShift(staff, open);
+    }
+  } else {
+    renderJobPick(staff);
+  }
+}
+
+// ---------- Job pick ----------
+function renderJobPick(staff) {
+  ui.screen = "jobpick";
+  const buttons = JOBS
+    .filter(j => (staff.wages && staff.wages[JOB_KEYS[j]] != null && staff.wages[JOB_KEYS[j]] !== ""))
+    .map(j => el("button", {
+      class: "big-btn primary",
+      onclick: () => doClockIn(staff, j)
+    }, j));
+  if (buttons.length === 0) {
+    // No wages configured — allow all jobs anyway
+    JOBS.forEach(j => buttons.push(el("button", { class: "big-btn primary", onclick: () => doClockIn(staff, j) }, j)));
+  }
+  const card = el("div", { class: "card" }, [
+    el("h2", {}, `Hi ${staff.name}!`),
+    el("div", { class: "sub" }, "What are you doing today?"),
+    ...buttons,
+    el("button", { class: "big-btn subtle", onclick: () => { renderKeypad(); } }, "Cancel")
+  ]);
+  const wrap = el("div", { class: "screen center" }, [card]);
+  mount(wrap);
+  resetIdleTimer();
+}
+
+// ---------- Active shift ----------
+function renderActiveShift(staff, punch) {
+  ui.screen = "active";
+  const now = new Date();
+  const inTime = new Date(punch.clockIn);
+  const elapsed = now - inTime;
+  const onBreak = !!punch.breakStart;
+  const breakMinNow = punch.breakMinutes || 0;
+
+  const workedLabel = onBreak
+    ? "You are on a break right now."
+    : `You've been working ${fmtDuration(elapsed - breakMinNow * 60000)}`;
+
+  const breakBtn = onBreak
+    ? el("button", { class: "big-btn success", onclick: () => doEndBreak(staff, punch) }, "End break — back to work")
+    : el("button", { class: "big-btn subtle", onclick: () => doStartBreak(staff, punch) }, "Start unpaid break");
+
+  const card = el("div", { class: "card" }, [
+    el("h2", {}, `Welcome back, ${staff.name}.`),
+    el("div", { class: "sub" }, `You clocked in for ${punch.job} at ${fmtTime(punch.clockIn)}`),
+    el("div", { class: "clock-large" }, fmtTime(now.toISOString())),
+    el("div", { class: "clock-sub" }, workedLabel),
+    onBreak
+      ? breakBtn
+      : el("button", { class: "big-btn primary", onclick: () => doClockOut(staff, punch) }, "CLOCK OUT"),
+    onBreak ? null : breakBtn,
+    el("button", { class: "big-btn subtle", onclick: () => renderKeypad() }, "Cancel — go back")
+  ]);
+  const wrap = el("div", { class: "screen center" }, [card]);
+  mount(wrap);
+  resetIdleTimer();
+}
+
+// ---------- Missed punch recovery ----------
+function renderMissedPunch(staff, punch) {
+  ui.screen = "missed";
+  const inWhen = new Date(punch.clockIn);
+  const nowSel = { value: fmtDateTimeInput(nowIso()) };
+  // Suggest: 4h after clock-in and 8h after clock-in as quick options
+  const suggestions = [4, 6, 8].map(h => {
+    const t = new Date(inWhen.getTime() + h * 3600000);
+    return el("button", { class: "big-btn", onclick: () => {
+      punch.clockOut = t.toISOString();
+      punch.synced = false;
+      punch.editedAt = nowIso();
+      saveState();
+      trySync();
+      renderConfirmation("out", staff, punch);
+    }}, `${h} hours later (${fmtTime(t.toISOString())})`);
+  });
+
+  const picker = el("input", { type: "datetime-local", value: fmtDateTimeInput(nowIso()), id: "missed-picker" });
+  picker.style.width = "100%"; picker.style.padding = "16px"; picker.style.fontSize = "20px";
+  picker.style.background = "var(--bg-2)"; picker.style.color = "var(--text)";
+  picker.style.border = "2px solid var(--border)"; picker.style.borderRadius = "12px";
+
+  const card = el("div", { class: "card" }, [
+    el("h2", {}, `Hi ${staff.name}!`),
+    el("div", { class: "sub" }, "Looks like you forgot to clock out last time. When did you leave?"),
+    el("div", { class: "clock-sub", style: { textAlign: "left", marginBottom: "16px" } }, `You clocked in ${fmtDate(punch.clockIn)} at ${fmtTime(punch.clockIn)}.`),
+    ...suggestions,
+    el("div", { style: { margin: "20px 0 8px", color: "var(--text-dim)" } }, "Or set the exact time:"),
+    picker,
+    el("button", {
+      class: "big-btn primary", style: { marginTop: "16px" },
+      onclick: () => {
+        const val = document.getElementById("missed-picker").value;
+        if (!val) return;
+        const iso = parseDateTimeInput(val);
+        if (new Date(iso) <= new Date(punch.clockIn)) {
+          toast("End time must be after clock-in time.");
+          return;
+        }
+        punch.clockOut = iso;
+        punch.synced = false;
+        punch.editedAt = nowIso();
+        saveState();
+        trySync();
+        renderConfirmation("out", staff, punch);
+      }
+    }, "Save"),
+    el("button", { class: "big-btn subtle", onclick: () => renderKeypad() }, "Cancel")
+  ]);
+  const wrap = el("div", { class: "screen center" }, [card]);
+  mount(wrap);
+  resetIdleTimer();
+}
+
+// ---------- Clock in / out actions ----------
+let recentPunchTs = 0;
+function doClockIn(staff, job) {
+  // Duplicate-punch protection
+  if (Date.now() - recentPunchTs < 1500) return;
+  recentPunchTs = Date.now();
+  // Also make sure they don't already have an open shift
+  const existing = openPunchFor(staff.id);
+  if (existing) {
+    renderActiveShift(staff, existing);
+    return;
+  }
+  const punch = {
+    id: uid(),
+    staffId: staff.id,
+    staffName: staff.name, // denormalize for sync
+    job,
+    clockIn: nowIso(),
+    clockOut: null,
+    breakMinutes: 0,
+    breakStart: null,
+    notes: "",
+    synced: false,
+    editedAt: nowIso(),
+    createdAt: nowIso()
+  };
+  state.punches.push(punch);
+  saveState();
+  chime("in");
+  trySync();
+  renderConfirmation("in", staff, punch);
+}
+
+function doClockOut(staff, punch) {
+  if (Date.now() - recentPunchTs < 1500) return;
+  recentPunchTs = Date.now();
+  // If mid-break, end it first
+  if (punch.breakStart) {
+    const breakMs = Date.now() - new Date(punch.breakStart).getTime();
+    punch.breakMinutes = (punch.breakMinutes || 0) + Math.round(breakMs / 60000);
+    punch.breakStart = null;
+  }
+  punch.clockOut = nowIso();
+  punch.synced = false;
+  punch.editedAt = nowIso();
+  saveState();
+  chime("out");
+  trySync();
+  renderConfirmation("out", staff, punch);
+}
+
+function doStartBreak(staff, punch) {
+  if (punch.breakStart) return;
+  punch.breakStart = nowIso();
+  saveState();
+  renderActiveShift(staff, punch);
+}
+function doEndBreak(staff, punch) {
+  if (!punch.breakStart) return;
+  const breakMs = Date.now() - new Date(punch.breakStart).getTime();
+  punch.breakMinutes = (punch.breakMinutes || 0) + Math.round(breakMs / 60000);
+  punch.breakStart = null;
+  saveState();
+  renderActiveShift(staff, punch);
+}
+
+// ---------- Confirmation splash ----------
+function renderConfirmation(kind, staff, punch) {
+  ui.screen = "confirm";
+  document.getElementById("sync-badge").classList.remove("hidden");
+  const isIn = kind === "in";
+  let bigLine, metaLine;
+  if (isIn) {
+    bigLine = `You're clocked in.`;
+    metaLine = `${fmtTime(punch.clockIn)} — ${punch.job}. Have a good shift!`;
+  } else {
+    const worked = calcHours(punch) * 3600000;
+    const brk = (punch.breakMinutes || 0) * 60000;
+    bigLine = `You're clocked out.`;
+    const totalMs = new Date(punch.clockOut) - new Date(punch.clockIn);
+    metaLine = `Total: ${fmtDuration(totalMs)} · Break: ${(punch.breakMinutes||0)} min · Paid: ${fmtDuration(worked)}`;
+  }
+  const splash = el("div", { class: "splash " + (isIn ? "in" : "out") }, [
+    el("div", { class: "splash-icon" }, isIn ? "✓" : "👋"),
+    el("h1", {}, `Thanks ${staff.name}!`),
+    el("div", { class: "big" }, bigLine),
+    el("div", { class: "meta" }, metaLine),
+    el("button", { class: "big-btn", style: { maxWidth: "300px" }, onclick: () => renderKeypad() }, "Done"),
+    el("div", { class: "cta" }, "Tap Done, or this will close on its own.")
+  ]);
+  mount(splash);
+  clearIdleTimer();
+  setTimeout(() => {
+    if (ui.screen === "confirm") renderKeypad();
+  }, CONFIRM_MS);
+}
+
+// ============================================================
+// MANAGER CONSOLE
+// ============================================================
+function renderManager() {
+  ui.screen = "manager";
+  document.getElementById("sync-badge").classList.add("hidden");
+  clearIdleTimer(); // no auto-return from manager
+  const header = el("div", { class: "mgr-header" }, [
+    el("h2", {}, "Manager Console"),
+    el("button", { class: "done-btn", onclick: () => renderKeypad() }, "Done")
+  ]);
+  const tabs = el("div", { class: "mgr-tabs" }, [
+    ["onclock",   "On Clock"],
+    ["payperiod", "Pay Period"],
+    ["staff",     "Staff"],
+    ["punches",   "Punch Log"],
+    ["settings",  "Settings"]
+  ].map(([k, label]) =>
+    el("button", {
+      class: "mgr-tab" + (ui.managerTab === k ? " active" : ""),
+      onclick: () => { ui.managerTab = k; renderManager(); }
+    }, label)
+  ));
+  const body = el("div", { class: "mgr-body", id: "mgr-body" });
+  const wrap = el("div", { class: "screen", style: { padding: "0", flex: "1", display: "flex", flexDirection: "column" } }, [
+    header, tabs, body
+  ]);
+  mount(wrap);
+  renderManagerTab();
+}
+
+function renderManagerTab() {
+  const body = document.getElementById("mgr-body");
+  if (!body) return;
+  body.innerHTML = "";
+  switch (ui.managerTab) {
+    case "onclock":   renderTabOnClock(body); break;
+    case "payperiod": renderTabPayPeriod(body); break;
+    case "staff":     renderTabStaff(body); break;
+    case "punches":   renderTabPunches(body); break;
+    case "settings":  renderTabSettings(body); break;
+  }
+}
+
+// ---------- Tab: On Clock ----------
+function renderTabOnClock(body) {
+  body.appendChild(el("h3", {}, "Currently punched in"));
+  const openPunches = state.punches.filter(p => !p.clockOut);
+  if (openPunches.length === 0) {
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [ el("div", { class: "meta" }, "Nobody is on the clock right now.") ])
+    ]));
+    return;
+  }
+  openPunches.sort((a,b) => new Date(a.clockIn) - new Date(b.clockIn));
+  openPunches.forEach(p => {
+    const staff = staffById(p.staffId);
+    const elapsed = Date.now() - new Date(p.clockIn).getTime();
+    const flag = isLikelyMissedPunch(p);
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [
+        el("div", { class: "name" }, staff ? staff.name : (p.staffName || "Unknown")),
+        el("div", { class: "meta" }, [
+          `${p.job} · in at ${fmtTime(p.clockIn)} · `,
+          el("strong", { style: { color: "var(--gold)" } }, fmtDuration(elapsed - (p.breakMinutes || 0) * 60000)),
+          flag ? el("span", { class: "pill ot", style: { marginLeft: "12px" } }, "OPEN >16h — likely missed punch") : null
+        ])
+      ]),
+      el("div", { class: "actions" }, [
+        el("button", { class: "btn-sm", onclick: () => editPunchModal(p.id) }, "Edit"),
+        el("button", { class: "btn-sm primary", onclick: () => {
+          if (!confirm(`Clock out ${staff ? staff.name : "this person"} right now?`)) return;
+          p.clockOut = nowIso();
+          if (p.breakStart) {
+            p.breakMinutes = (p.breakMinutes || 0) + Math.round((Date.now() - new Date(p.breakStart).getTime()) / 60000);
+            p.breakStart = null;
+          }
+          p.synced = false; p.editedAt = nowIso();
+          saveState(); trySync(); renderManagerTab();
+        }}, "Clock out now")
+      ])
+    ]));
+  });
+}
+
+// ---------- Tab: Pay Period ----------
+function renderTabPayPeriod(body) {
+  if (!ui.payPeriodStart || !ui.payPeriodEnd) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 13);
+    ui.payPeriodStart = startOfDay(start).toISOString();
+    ui.payPeriodEnd = endOfDay(end).toISOString();
+  }
+  // Date range controls
+  const controls = el("div", { style: { display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px", alignItems: "flex-end" } }, [
+    el("div", { class: "field", style: { margin: 0, flex: "1", minWidth: "180px" } }, [
+      el("label", {}, "Start"),
+      el("input", { type: "date", id: "pp-start", value: ui.payPeriodStart.slice(0, 10),
+        onchange: (e) => { ui.payPeriodStart = startOfDay(e.target.value).toISOString(); renderManagerTab(); } })
+    ]),
+    el("div", { class: "field", style: { margin: 0, flex: "1", minWidth: "180px" } }, [
+      el("label", {}, "End"),
+      el("input", { type: "date", id: "pp-end", value: ui.payPeriodEnd.slice(0, 10),
+        onchange: (e) => { ui.payPeriodEnd = endOfDay(e.target.value).toISOString(); renderManagerTab(); } })
+    ]),
+    el("button", { class: "btn-sm", onclick: () => {
+      const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 13);
+      ui.payPeriodStart = startOfDay(start).toISOString();
+      ui.payPeriodEnd = endOfDay(end).toISOString();
+      renderManagerTab();
+    }}, "Last 14 days")
+  ]);
+  body.appendChild(controls);
+
+  // Compute per-staff, per-job hours & pay for range
+  const rangeStart = new Date(ui.payPeriodStart);
+  const rangeEnd = new Date(ui.payPeriodEnd);
+  const punches = state.punches.filter(p => {
+    if (!p.clockOut) return false; // exclude open shifts
+    const inD = new Date(p.clockIn);
+    return inD >= rangeStart && inD <= rangeEnd;
+  });
+
+  const byStaff = {};
+  punches.forEach(p => {
+    const staff = staffById(p.staffId);
+    if (!staff) return;
+    if (!byStaff[staff.id]) byStaff[staff.id] = { staff, jobs: {}, weeks: {}, totalHours: 0, totalPay: 0 };
+    const hrs = calcHours(p);
+    const pay = calcPay(p, staff);
+    byStaff[staff.id].jobs[p.job] = byStaff[staff.id].jobs[p.job] || { hours: 0, pay: 0 };
+    byStaff[staff.id].jobs[p.job].hours += hrs;
+    byStaff[staff.id].jobs[p.job].pay += pay;
+    byStaff[staff.id].totalHours += hrs;
+    byStaff[staff.id].totalPay += pay;
+    // Weeks (Mon-Sun) for OT flagging
+    const wk = weekKey(p.clockIn);
+    byStaff[staff.id].weeks[wk] = (byStaff[staff.id].weeks[wk] || 0) + hrs;
+  });
+
+  // Buttons row
+  const buttonsRow = el("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" } }, [
+    el("button", { class: "btn-sm primary", onclick: () => downloadCsv(byStaff, punches) }, "Download CSV"),
+    el("button", { class: "btn-sm", onclick: () => copyGustoSummary(byStaff) }, "Copy Gusto summary")
+  ]);
+  body.appendChild(buttonsRow);
+
+  if (Object.keys(byStaff).length === 0) {
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [ el("div", { class: "meta" }, "No completed punches in this range yet.") ])
+    ]));
+    return;
+  }
+
+  let grandHours = 0, grandPay = 0, grandOTFlagged = false;
+  const sorted = Object.values(byStaff).sort((a,b) => a.staff.name.localeCompare(b.staff.name));
+  sorted.forEach(row => {
+    const otWeeks = Object.entries(row.weeks).filter(([, h]) => h > 40);
+    const flag = otWeeks.length > 0;
+    if (flag) grandOTFlagged = true;
+    grandHours += row.totalHours;
+    grandPay += row.totalPay;
+
+    const jobsPills = Object.entries(row.jobs).map(([job, v]) => {
+      const staff = row.staff;
+      const rate = staff.wages ? (staff.wages[JOB_KEYS[job]] || 0) : 0;
+      return el("div", { class: "meta", style: { marginTop: "4px" } },
+        `${job}: ${v.hours.toFixed(2)}h × ${money(rate)} = ${money(v.pay)}`);
+    });
+
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [
+        el("div", { class: "name" }, [
+          row.staff.name, " ",
+          flag ? el("span", { class: "pill ot" }, `OT: week over 40h`) : null
+        ]),
+        el("div", { class: "meta" }, `Total: ${row.totalHours.toFixed(2)} hours · Gross: ${money(row.totalPay)}`),
+        ...jobsPills,
+        flag ? el("div", { class: "meta", style: { color: "var(--red-hot)", marginTop: "6px" } },
+          otWeeks.map(([wk, h]) => `Week ${wk}: ${h.toFixed(2)}h`).join(" · ")
+        ) : null
+      ])
+    ]));
+  });
+
+  body.appendChild(el("div", { style: { marginTop: "20px", padding: "16px", background: "var(--surface)", borderRadius: "16px" } }, [
+    el("div", { class: "summary-line" }, [ el("span", {}, "Total hours"), el("strong", {}, grandHours.toFixed(2)) ]),
+    el("div", { class: "summary-line total" }, [ el("span", {}, "Total gross pay"), el("strong", {}, money(grandPay)) ])
+  ]));
+}
+
+function weekKey(iso) {
+  // Monday-Sunday week key like "2026-W29"
+  const d = new Date(iso);
+  d.setHours(0,0,0,0);
+  const day = d.getDay() || 7; // 1=Mon..7=Sun
+  d.setDate(d.getDate() - (day - 1));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function downloadCsv(byStaff, punches) {
+  const rows = [];
+  rows.push(["Name", "Job", "Clock In", "Clock Out", "Break (min)", "Hours", "Rate", "Pay", "Notes"]);
+  punches.slice().sort((a,b) => new Date(a.clockIn) - new Date(b.clockIn)).forEach(p => {
+    const s = staffById(p.staffId);
+    const rate = s && s.wages ? (s.wages[JOB_KEYS[p.job]] || 0) : 0;
+    rows.push([
+      s ? s.name : (p.staffName || ""),
+      p.job || "",
+      new Date(p.clockIn).toLocaleString(),
+      p.clockOut ? new Date(p.clockOut).toLocaleString() : "",
+      p.breakMinutes || 0,
+      calcHours(p).toFixed(2),
+      rate.toFixed(2),
+      calcPay(p, s).toFixed(2),
+      (p.notes || "").replace(/[\r\n,]/g, " ")
+    ]);
+  });
+  rows.push([]);
+  rows.push(["Summary"]);
+  rows.push(["Name", "Total Hours", "Total Gross Pay"]);
+  Object.values(byStaff).forEach(r => {
+    rows.push([r.staff.name, r.totalHours.toFixed(2), r.totalPay.toFixed(2)]);
+  });
+
+  const csv = rows.map(r => r.map(v => {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(",")).join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const range = ui.payPeriodStart.slice(0,10) + "_to_" + ui.payPeriodEnd.slice(0,10);
+  a.download = `cik-payroll_${range}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("CSV downloaded.");
+}
+
+function copyGustoSummary(byStaff) {
+  const range = `${fmtDate(ui.payPeriodStart)} — ${fmtDate(ui.payPeriodEnd)}`;
+  const lines = [];
+  lines.push(`Cast Iron Kitchen — Payroll ${range}`);
+  lines.push("");
+  Object.values(byStaff)
+    .sort((a,b) => a.staff.name.localeCompare(b.staff.name))
+    .forEach(r => {
+      lines.push(`${r.staff.name}`);
+      Object.entries(r.jobs).forEach(([job, v]) => {
+        const rate = r.staff.wages ? (r.staff.wages[JOB_KEYS[job]] || 0) : 0;
+        lines.push(`  ${job}: ${v.hours.toFixed(2)}h @ ${money(rate)} = ${money(v.pay)}`);
+      });
+      const otWeeks = Object.entries(r.weeks).filter(([, h]) => h > 40);
+      if (otWeeks.length) lines.push(`  ** OT flag: ` + otWeeks.map(([wk, h]) => `wk ${wk} = ${h.toFixed(2)}h`).join(", "));
+      lines.push(`  Total: ${r.totalHours.toFixed(2)}h — ${money(r.totalPay)}`);
+      lines.push("");
+    });
+  const txt = lines.join("\n");
+  navigator.clipboard.writeText(txt).then(
+    () => toast("Copied to clipboard."),
+    () => {
+      // Fallback: show it in a modal to hand-copy
+      showModal("Payroll summary (copy this)", [
+        el("textarea", { style: { width: "100%", minHeight: "300px", background: "var(--bg-2)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px" } }, txt),
+        el("button", { class: "big-btn", onclick: closeModal }, "Close")
+      ]);
+    }
+  );
+}
+
+// ---------- Tab: Staff ----------
+function renderTabStaff(body) {
+  body.appendChild(el("button", { class: "btn-sm primary", style: { marginBottom: "16px" }, onclick: () => editStaffModal(null) }, "+ Add person"));
+
+  state.staff.slice().sort((a,b) => a.name.localeCompare(b.name)).forEach(s => {
+    const wageLine = JOBS.map(j => {
+      const w = s.wages ? s.wages[JOB_KEYS[j]] : null;
+      return (w != null && w !== "") ? `${j} ${money(w)}` : null;
+    }).filter(Boolean).join(" · ");
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [
+        el("div", { class: "name" }, [
+          s.name, " ",
+          s.active ? el("span", { class: "pill active" }, "active") : el("span", { class: "pill" }, "inactive")
+        ]),
+        el("div", { class: "meta" }, `PIN: ${s.pin} · ${wageLine || "No wages set"}`),
+        s.notes ? el("div", { class: "meta" }, s.notes) : null
+      ]),
+      el("div", { class: "actions" }, [
+        el("button", { class: "btn-sm", onclick: () => editStaffModal(s.id) }, "Edit"),
+        el("button", { class: "btn-sm", onclick: () => { s.active = !s.active; saveState(); renderManagerTab(); } }, s.active ? "Mark inactive" : "Mark active"),
+        el("button", { class: "btn-sm danger", onclick: () => {
+          if (!confirm(`Delete ${s.name}? Their punch history will still be kept.`)) return;
+          state.staff = state.staff.filter(x => x.id !== s.id);
+          saveState(); renderManagerTab();
+        }}, "Delete")
+      ])
+    ]));
+  });
+}
+
+function editStaffModal(staffId) {
+  const isNew = !staffId;
+  const s = isNew
+    ? { id: uid(), name: "", pin: "", wages: { prepCook: "", prepPlate: "", catering: "" }, active: true, notes: "" }
+    : shallowClone(staffById(staffId));
+  if (!s) return;
+
+  const form = el("div", {}, [
+    el("div", { class: "field" }, [
+      el("label", {}, "Name"),
+      el("input", { id: "st-name", type: "text", value: s.name, autocomplete: "off" })
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {}, "4-digit PIN (unique per person)"),
+      el("input", { id: "st-pin", type: "text", inputmode: "numeric", maxlength: "4", pattern: "[0-9]{4}", value: s.pin, autocomplete: "off" })
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {}, "Wages per job — leave blank for jobs they don't do"),
+      el("div", { class: "field-row" }, [
+        el("div", {}, [
+          el("small", {}, "Prep Cook $/hr"),
+          el("input", { id: "st-w-cook", type: "number", step: "0.01", value: s.wages ? s.wages.prepCook : "" })
+        ]),
+        el("div", {}, [
+          el("small", {}, "Prep Plate $/hr"),
+          el("input", { id: "st-w-plate", type: "number", step: "0.01", value: s.wages ? s.wages.prepPlate : "" })
+        ]),
+        el("div", {}, [
+          el("small", {}, "Catering $/hr"),
+          el("input", { id: "st-w-cater", type: "number", step: "0.01", value: s.wages ? s.wages.catering : "" })
+        ])
+      ])
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {}, "Notes (optional)"),
+      el("textarea", { id: "st-notes", rows: "2" }, s.notes || "")
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {},  [
+        el("input", { id: "st-active", type: "checkbox", style: { width: "auto", marginRight: "8px", transform: "scale(1.4)" }, ...(s.active ? { checked: true } : {}) }),
+        " Active"
+      ])
+    ]),
+    el("div", { style: { display: "flex", gap: "12px", marginTop: "12px" } }, [
+      el("button", { class: "big-btn primary", style: { flex: "1", margin: 0 }, onclick: () => saveStaffFromModal(s.id, isNew) }, "Save"),
+      el("button", { class: "big-btn", style: { flex: "1", margin: 0 }, onclick: closeModal }, "Cancel")
+    ])
+  ]);
+  showModal(isNew ? "Add person" : `Edit ${s.name || "person"}`, [form]);
+}
+
+function saveStaffFromModal(sid, isNew) {
+  const name = document.getElementById("st-name").value.trim();
+  const pin = document.getElementById("st-pin").value.trim();
+  const notes = document.getElementById("st-notes").value.trim();
+  const wCook = document.getElementById("st-w-cook").value;
+  const wPlate = document.getElementById("st-w-plate").value;
+  const wCater = document.getElementById("st-w-cater").value;
+  const active = document.getElementById("st-active").checked;
+
+  if (!name) { toast("Please enter a name."); return; }
+  if (!/^\d{4}$/.test(pin)) { toast("PIN must be exactly 4 digits."); return; }
+  // Uniqueness
+  const dup = state.staff.find(x => x.pin === pin && x.id !== sid);
+  if (dup) { toast(`PIN ${pin} is already used by ${dup.name}.`); return; }
+  // Master PIN collision
+  if (pin === state.settings.masterPin) { toast("That PIN is reserved for the manager. Pick another."); return; }
+
+  const wages = {
+    prepCook:  wCook === "" ? "" : Number(wCook),
+    prepPlate: wPlate === "" ? "" : Number(wPlate),
+    catering:  wCater === "" ? "" : Number(wCater)
+  };
+  const payload = { id: sid, name, pin, wages, active, notes };
+  if (isNew) {
+    state.staff.push(payload);
+  } else {
+    const idx = state.staff.findIndex(x => x.id === sid);
+    if (idx >= 0) state.staff[idx] = payload;
+  }
+  saveState();
+  closeModal();
+  renderManagerTab();
+  toast(isNew ? "Person added." : "Saved.");
+}
+
+// ---------- Tab: Punch Log ----------
+function renderTabPunches(body) {
+  const controls = el("div", { style: { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" } }, [
+    el("input", { id: "pl-search", type: "search", placeholder: "Filter by name...",
+      oninput: () => renderTabPunches(body),
+      style: { flex: "1", minWidth: "220px", padding: "12px", background: "var(--bg-2)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "10px" } })
+  ]);
+  const existingSearch = document.getElementById("pl-search");
+  const searchVal = existingSearch ? existingSearch.value.toLowerCase() : "";
+  body.appendChild(controls);
+  const searchInput = document.getElementById("pl-search");
+  if (searchInput) searchInput.value = searchVal;
+
+  const list = state.punches.slice().sort((a,b) => new Date(b.clockIn) - new Date(a.clockIn));
+  const filtered = searchVal
+    ? list.filter(p => {
+        const s = staffById(p.staffId);
+        const name = s ? s.name : (p.staffName || "");
+        return name.toLowerCase().includes(searchVal);
+      })
+    : list;
+
+  if (filtered.length === 0) {
+    body.appendChild(el("div", { class: "row-item" }, [ el("div", { class: "info" }, [ el("div", { class: "meta" }, "No punches yet.") ]) ]));
+    return;
+  }
+  // Show last 200 for performance; user can search
+  filtered.slice(0, 200).forEach(p => {
+    const s = staffById(p.staffId);
+    const hrs = calcHours(p);
+    body.appendChild(el("div", { class: "row-item" }, [
+      el("div", { class: "info" }, [
+        el("div", { class: "name" }, s ? s.name : (p.staffName || "Unknown")),
+        el("div", { class: "meta" },
+          `${p.job || "—"} · ${fmtDate(p.clockIn)} ${fmtTime(p.clockIn)} → ${p.clockOut ? fmtTime(p.clockOut) : "OPEN"} · ${hrs.toFixed(2)}h · break ${p.breakMinutes||0}m` +
+          (p.synced === false ? " · unsynced" : "")
+        )
+      ]),
+      el("div", { class: "actions" }, [
+        el("button", { class: "btn-sm", onclick: () => editPunchModal(p.id) }, "Edit"),
+        el("button", { class: "btn-sm danger", onclick: () => {
+          if (!confirm("Delete this punch? This can't be undone locally.")) return;
+          // Mark for sync deletion — we'll send a "deleted" flag so the sheet can mark it too
+          p.deleted = true;
+          p.synced = false;
+          p.editedAt = nowIso();
+          saveState();
+          trySync();
+          // Also remove from local list
+          state.punches = state.punches.filter(x => x.id !== p.id || x.deleted !== true ? true : false);
+          // Simpler: keep the deleted flag locally so sync can push it, then actually filter out on next reload
+          renderManagerTab();
+        }}, "Delete")
+      ])
+    ]));
+  });
+  if (filtered.length > 200) {
+    body.appendChild(el("div", { class: "meta", style: { padding: "12px 0", color: "var(--muted)" } },
+      `Showing 200 of ${filtered.length}. Filter by name to narrow.`));
+  }
+}
+
+function editPunchModal(punchId) {
+  const p = state.punches.find(x => x.id === punchId);
+  if (!p) return;
+  const s = staffById(p.staffId);
+  const form = el("div", {}, [
+    el("div", { class: "field" }, [
+      el("label", {}, "Person"),
+      (() => {
+        const sel = el("select", { id: "pn-staff" }, state.staff.map(st =>
+          el("option", { value: st.id, ...(st.id === p.staffId ? { selected: true } : {}) }, st.name + (st.active ? "" : " (inactive)"))
+        ));
+        return sel;
+      })()
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {}, "Job"),
+      (() => {
+        const sel = el("select", { id: "pn-job" }, JOBS.map(j =>
+          el("option", { value: j, ...(j === p.job ? { selected: true } : {}) }, j)
+        ));
+        return sel;
+      })()
+    ]),
+    el("div", { class: "field-row" }, [
+      el("div", { class: "field" }, [
+        el("label", {}, "Clock In"),
+        el("input", { id: "pn-in", type: "datetime-local", value: fmtDateTimeInput(p.clockIn) })
+      ]),
+      el("div", { class: "field" }, [
+        el("label", {}, "Clock Out"),
+        el("input", { id: "pn-out", type: "datetime-local", value: fmtDateTimeInput(p.clockOut) })
+      ]),
+      el("div", { class: "field" }, [
+        el("label", {}, "Break (min)"),
+        el("input", { id: "pn-brk", type: "number", min: "0", step: "1", value: p.breakMinutes || 0 })
+      ])
+    ]),
+    el("div", { class: "field" }, [
+      el("label", {}, "Notes"),
+      el("textarea", { id: "pn-notes", rows: "2" }, p.notes || "")
+    ]),
+    el("div", { style: { display: "flex", gap: "12px", marginTop: "12px" } }, [
+      el("button", { class: "big-btn primary", style: { flex: "1", margin: 0 }, onclick: () => savePunchFromModal(p.id) }, "Save"),
+      el("button", { class: "big-btn", style: { flex: "1", margin: 0 }, onclick: closeModal }, "Cancel")
+    ])
+  ]);
+  showModal(`Edit punch — ${s ? s.name : (p.staffName || "")}`, [form]);
+}
+
+function savePunchFromModal(punchId) {
+  const p = state.punches.find(x => x.id === punchId);
+  if (!p) return;
+  const staffId = document.getElementById("pn-staff").value;
+  const job = document.getElementById("pn-job").value;
+  const clockIn = parseDateTimeInput(document.getElementById("pn-in").value);
+  const outVal = document.getElementById("pn-out").value;
+  const clockOut = outVal ? parseDateTimeInput(outVal) : null;
+  const brk = parseInt(document.getElementById("pn-brk").value, 10) || 0;
+  const notes = document.getElementById("pn-notes").value.trim();
+
+  if (!clockIn) { toast("Clock-in time is required."); return; }
+  if (clockOut && new Date(clockOut) <= new Date(clockIn)) { toast("Clock-out must be after clock-in."); return; }
+
+  p.staffId = staffId;
+  p.staffName = (staffById(staffId) || {}).name || p.staffName;
+  p.job = job;
+  p.clockIn = clockIn;
+  p.clockOut = clockOut;
+  p.breakMinutes = brk;
+  p.breakStart = null;
+  p.notes = notes;
+  p.synced = false;
+  p.editedAt = nowIso();
+  saveState();
+  trySync();
+  closeModal();
+  renderManagerTab();
+  toast("Punch saved.");
+}
+
+// ---------- Tab: Settings ----------
+function renderTabSettings(body) {
+  const unsynced = state.punches.filter(p => p.synced === false).length;
+  body.appendChild(el("div", { class: "row-item" }, [
+    el("div", { class: "info", style: { width: "100%" } }, [
+      el("div", { class: "name" }, "Master PIN"),
+      el("div", { class: "field" }, [
+        el("input", { id: "set-master", type: "text", maxlength: "4", pattern: "[0-9]{4}", inputmode: "numeric", value: state.settings.masterPin })
+      ]),
+      el("button", { class: "btn-sm primary", onclick: () => {
+        const v = document.getElementById("set-master").value.trim();
+        if (!/^\d{4}$/.test(v)) { toast("Master PIN must be 4 digits."); return; }
+        if (state.staff.some(s => s.pin === v)) { toast("A staff member already uses that PIN. Pick another."); return; }
+        state.settings.masterPin = v; saveState();
+        toast("Master PIN updated.");
+      }}, "Save master PIN")
+    ])
+  ]));
+
+  body.appendChild(el("div", { class: "row-item" }, [
+    el("div", { class: "info", style: { width: "100%" } }, [
+      el("div", { class: "name" }, "Google Sheet sync"),
+      el("div", { class: "meta", style: { marginBottom: "12px" } },
+        "Paste the Web App URL from your Apps Script deployment. See the README for setup steps."),
+      el("div", { class: "field" }, [
+        el("input", { id: "set-sync", type: "url", placeholder: "https://script.google.com/macros/s/.../exec", value: state.settings.syncUrl || "" })
+      ]),
+      el("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } }, [
+        el("button", { class: "btn-sm primary", onclick: () => {
+          state.settings.syncUrl = document.getElementById("set-sync").value.trim();
+          saveState();
+          toast("Sync URL saved.");
+        }}, "Save URL"),
+        el("button", { class: "btn-sm", onclick: () => testSync() }, "Test sync"),
+        el("button", { class: "btn-sm", onclick: () => forcePushAll() }, `Force-push all (${unsynced} pending)`)
+      ]),
+      el("div", { class: "meta", style: { marginTop: "12px" } },
+        `Last sync: ${state.settings.lastSync ? new Date(state.settings.lastSync).toLocaleString() : "never"} — ${state.settings.lastSyncStatus || "no attempts"}`)
+    ])
+  ]));
+
+  body.appendChild(el("div", { class: "row-item" }, [
+    el("div", { class: "info", style: { width: "100%" } }, [
+      el("div", { class: "name" }, "Backup / restore"),
+      el("div", { class: "meta", style: { marginBottom: "12px" } }, "Download a full JSON backup of all data or restore from one."),
+      el("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } }, [
+        el("button", { class: "btn-sm primary", onclick: downloadBackup }, "Download backup"),
+        el("button", { class: "btn-sm", onclick: () => document.getElementById("restore-file").click() }, "Restore from backup"),
+        el("input", { id: "restore-file", type: "file", accept: "application/json", style: { display: "none" }, onchange: restoreBackup })
+      ])
+    ])
+  ]));
+
+  body.appendChild(el("div", { class: "row-item" }, [
+    el("div", { class: "info", style: { width: "100%" } }, [
+      el("div", { class: "name", style: { color: "var(--danger)" } }, "Danger zone"),
+      el("button", { class: "btn-sm danger", style: { marginTop: "8px" }, onclick: () => {
+        if (!confirm("This will erase ALL local data and reload seed staff. Are you sure?")) return;
+        if (!confirm("Really erase everything? This can't be undone.")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        state = loadState();
+        renderKeypad();
+      }}, "Reset app to seed data")
+    ])
+  ]));
+}
+
+function downloadBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cik-clock-backup_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("Backup downloaded.");
+}
+function restoreBackup(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed.staff || !parsed.punches) throw new Error("bad format");
+      if (!confirm("Replace current data with backup? Everything currently in the app will be overwritten.")) return;
+      state = Object.assign({}, seedState(), parsed);
+      state.settings = Object.assign({}, seedState().settings, parsed.settings || {});
+      saveState();
+      renderKeypad();
+      toast("Restored.");
+    } catch (err) {
+      toast("That file didn't look like a backup.");
+    }
+  };
+  reader.readAsText(f);
+}
+
+// ============================================================
+// SYNC (Google Sheets via Apps Script)
+// ============================================================
+async function trySync() {
+  updateSyncBadge();
+  if (!state.settings.syncUrl) return;
+  if (!navigator.onLine) return;
+  const unsynced = state.punches.filter(p => p.synced === false);
+  if (unsynced.length === 0) return;
+  await pushToSheet(unsynced);
+}
+async function forcePushAll() {
+  if (!state.settings.syncUrl) { toast("Add a sync URL first."); return; }
+  const punches = state.punches.slice();
+  toast(`Pushing ${punches.length} punches...`);
+  await pushToSheet(punches, /* force */ true);
+}
+async function pushToSheet(punches, force) {
+  const payload = { punches: punches.map(p => {
+    const s = staffById(p.staffId);
+    return {
+      id: p.id,
+      staffId: p.staffId,
+      staffName: s ? s.name : (p.staffName || ""),
+      job: p.job || "",
+      clockIn: p.clockIn,
+      clockOut: p.clockOut,
+      breakMinutes: p.breakMinutes || 0,
+      hours: calcHours(p),
+      rate: s && s.wages ? (s.wages[JOB_KEYS[p.job]] || 0) : 0,
+      pay: calcPay(p, s),
+      notes: p.notes || "",
+      deleted: p.deleted === true,
+      editedAt: p.editedAt || p.createdAt || p.clockIn
+    };
+  }) };
+  try {
+    const res = await fetch(state.settings.syncUrl, {
+      method: "POST",
+      // text/plain avoids CORS preflight; Apps Script parses e.postData.contents
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok === false) throw new Error(data.error || "Sheet rejected the push");
+    // Mark punches synced (and remove any that were deleted)
+    punches.forEach(p => { p.synced = true; });
+    state.punches = state.punches.filter(p => !(p.deleted && p.synced));
+    state.settings.lastSync = nowIso();
+    state.settings.lastSyncStatus = `OK · ${payload.punches.length} sent`;
+    saveState();
+    if (force) toast("Pushed everything.");
+    updateSyncBadge();
+  } catch (err) {
+    state.settings.lastSync = nowIso();
+    state.settings.lastSyncStatus = "Error: " + (err.message || err);
+    saveState();
+    updateSyncBadge();
+    if (force) toast("Sync failed. " + (err.message || err));
+    console.error("Sync error:", err);
+  }
+}
+async function testSync() {
+  const url = document.getElementById("set-sync").value.trim() || state.settings.syncUrl;
+  if (!url) { toast("Paste a URL first."); return; }
+  toast("Testing sync...");
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ping: true }),
+      redirect: "follow"
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok) {
+      state.settings.syncUrl = url;
+      state.settings.lastSync = nowIso();
+      state.settings.lastSyncStatus = "Test OK";
+      saveState();
+      toast("Connected! The sheet answered.");
+      renderManagerTab();
+    } else {
+      throw new Error("Unexpected response");
+    }
+  } catch (err) {
+    toast("Couldn't reach the sheet: " + (err.message || err));
+    state.settings.lastSyncStatus = "Test error: " + (err.message || err);
+    saveState();
+    renderManagerTab();
+  }
+}
+function updateSyncBadge() {
+  const badge = document.getElementById("sync-badge");
+  const dot = badge.querySelector(".sync-dot");
+  const text = document.getElementById("sync-text");
+  dot.className = "sync-dot";
+  if (!state.settings.syncUrl) {
+    dot.classList.add("offline"); text.textContent = "Local only"; return;
+  }
+  if (!navigator.onLine) {
+    dot.classList.add("offline"); text.textContent = "Offline"; return;
+  }
+  const pending = state.punches.filter(p => p.synced === false).length;
+  if (pending > 0) {
+    dot.classList.add("pending"); text.textContent = `${pending} to sync`;
+  } else {
+    dot.classList.add("synced"); text.textContent = "Synced";
+  }
+}
+
+// ============================================================
+// MODAL / TOAST
+// ============================================================
+function showModal(title, children) {
+  closeModal();
+  const overlay = el("div", { class: "modal-overlay", id: "modal-overlay",
+    onclick: (e) => { if (e.target === overlay) closeModal(); }
+  }, [
+    el("div", { class: "modal" }, [
+      el("h3", {}, title),
+      ...children
+    ])
+  ]);
+  document.body.appendChild(overlay);
+}
+function closeModal() {
+  const m = document.getElementById("modal-overlay");
+  if (m) m.remove();
+}
+let toastTimer = null;
+function toast(msg) {
+  const existing = document.getElementById("toast");
+  if (existing) existing.remove();
+  const t = el("div", { class: "toast", id: "toast" }, msg);
+  document.body.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 3000);
+}
+
+// ============================================================
+// SOUND (gentle confirmation chime)
+// ============================================================
+let audioCtx = null;
+function chime(kind) {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const now = audioCtx.currentTime;
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.001;
+    gain.connect(audioCtx.destination);
+    const freqs = kind === "in" ? [523.25, 783.99] : [659.25, 392.00];
+    freqs.forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      osc.connect(gain);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.22);
+    });
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+  } catch (e) { /* ignore */ }
+  if (navigator.vibrate) navigator.vibrate(kind === "in" ? [40] : [40, 60, 40]);
+}
+
+// ============================================================
+// IDLE TIMEOUT — return to main clock screen if unused
+// ============================================================
+function resetIdleTimer() {
+  clearIdleTimer();
+  if (ui.screen === "manager" || ui.screen === "confirm") return;
+  ui.idleTimer = setTimeout(() => {
+    if (ui.screen !== "keypad" && ui.screen !== "manager" && ui.screen !== "confirm") {
+      renderKeypad();
+    }
+  }, IDLE_TIMEOUT_MS);
+}
+function clearIdleTimer() {
+  if (ui.idleTimer) { clearTimeout(ui.idleTimer); ui.idleTimer = null; }
+}
+document.addEventListener("touchstart", () => { if (ui.screen !== "keypad" && ui.screen !== "manager" && ui.screen !== "confirm") resetIdleTimer(); }, { passive: true });
+document.addEventListener("click", () => { if (ui.screen !== "keypad" && ui.screen !== "manager" && ui.screen !== "confirm") resetIdleTimer(); });
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener("online", () => { updateSyncBadge(); trySync(); });
+window.addEventListener("offline", updateSyncBadge);
+
+// Keyboard support (helpful when testing on a computer)
+document.addEventListener("keydown", (e) => {
+  if (ui.screen !== "keypad") return;
+  if (/^\d$/.test(e.key)) handleDigit(e.key);
+  else if (e.key === "Backspace") { ui.pin = ui.pin.slice(0, -1); renderKeypad(); }
+  else if (e.key === "Escape") { ui.pin = ""; renderKeypad(); }
+});
+
+// Register service worker
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW register failed:", err));
+  });
+}
+
+// Live-tick the active shift clock every 30s
+setInterval(() => {
+  if (ui.screen === "active") {
+    // Re-render only if we're still on the active screen
+    const openPunch = state.punches.find(p => !p.clockOut);
+    if (openPunch) {
+      const s = staffById(openPunch.staffId);
+      if (s) renderActiveShift(s, openPunch);
+    }
+  }
+}, 30000);
+
+// Start
+renderKeypad();
+updateSyncBadge();
+// Try a sync on boot if we have punches waiting
+setTimeout(trySync, 2000);
+</script>
+</body>
+</html>
